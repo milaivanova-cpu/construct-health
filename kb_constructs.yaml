@@ -1,0 +1,34 @@
+constructs:
+  self-control:
+    canonical_labels: ["self-control", "self control", "self–control"]
+    near_neighbors: ["self-regulation", "effortful control", "executive function", "grit", "willpower", "self-discipline", "inhibitory control"]
+    definition_cues:
+      - "regulation of impulses that conflict with longer-term goals"
+      - "ability to inhibit or modulate prepotent responses"
+    subcomponents:
+      - inhibitory control
+      - delay of gratification / delay discounting
+      - attentional control
+      - emotion regulation interface
+      - planning/goal maintenance
+    theories:
+      - dual-systems
+      - process model of self-control (Duckworth/Gross)
+      - value-based choice / expected value of control
+      - executive function / top-down control
+      - trait vs. state distinction
+  self-regulation:
+    canonical_labels: ["self-regulation", "self regulation", "SRL"]
+    near_neighbors: ["self-control", "executive function", "self-management", "emotion regulation", "metacognition"]
+    definition_cues:
+      - "processes of goal setting, monitoring, and adjusting behavior"
+    subcomponents:
+      - goal setting
+      - monitoring
+      - strategy use
+      - reflection / metacognition
+      - emotion/motivation regulation
+    theories:
+      - SRL cycle models (forethought, performance, reflection)
+      - expectancy-value
+      - control theory / cybernetic models
