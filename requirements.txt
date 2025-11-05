@@ -2,3 +2,5 @@ streamlit
 pypdf
 python-dateutil
 pyyaml
+pymupdf
+regex
