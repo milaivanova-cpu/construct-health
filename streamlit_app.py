@@ -1,12 +1,49 @@
 import streamlit as st
-from pypdf import PdfReader
-import yaml, re, json
+import yaml, json, regex as re
 from io import BytesIO
 
-st.set_page_config(page_title="Construct Health — Self-Control/Self-Regulation", layout="wide")
-st.title("🧠 Construct Health — Self-Control / Self-Regulation (v2 core)")
+# Prefer PyMuPDF for cleaner text; fall back to pypdf
+def extract_text(file) -> str:
+    try:
+        import fitz  # PyMuPDF
+        doc = fitz.open(stream=file.read(), filetype="pdf")
+        txt = []
+        for page in doc:
+            txt.append(page.get_text("text"))
+        return "\n".join(txt)
+    except Exception:
+        file.seek(0)
+        from pypdf import PdfReader
+        txt = []
+        r = PdfReader(file)
+        for p in r.pages:
+            try:
+                t = p.extract_text()
+                if t: txt.append(t)
+            except: pass
+        return "\n".join(txt)
 
-# ---------- Load knowledge bases ----------
+# --- sentence split (simple, fast, robust for PDFs)
+SPLIT = re.compile(r'(?<=\.)\s+(?=[A-Z\(])|(?<=[!?])\s+')
+def sentences(text:str):
+    raw = re.sub(r'\s+', ' ', text)
+    return [s.strip() for s in SPLIT.split(raw) if s.strip()]
+
+# --- sectionizer
+SECTION_HEAD = re.compile(r'\b(Abstract|Introduction|Background|Theory|Method|Methods|Measures?|Participants?|Procedure|Results?|Discussion|Conclusion)s?\b', re.I)
+def sectionize(text:str):
+    secs = {}
+    current = "Full Text"
+    secs[current] = []
+    for line in text.splitlines():
+        if SECTION_HEAD.search(line.strip()):
+            current = SECTION_HEAD.search(line.strip()).group(0).title()
+            secs.setdefault(current, [])
+        secs[current].append(line)
+    return {k: "\n".join(v).strip() for k,v in secs.items()}
+
+# --- KB loaders
+import os, yaml
 @st.cache_data
 def load_kb():
     with open("kb_constructs.yaml", "r", encoding="utf-8") as f:
@@ -14,213 +51,218 @@ def load_kb():
     with open("kb_measures.yaml", "r", encoding="utf-8") as f:
         kb_m = yaml.safe_load(f)
     return kb_c, kb_m
-
 KB_CONS, KB_MEAS = load_kb()
 
-# ---------- PDF text ----------
-def extract_text(file) -> str:
-    reader = PdfReader(file)
+# --- Patterns
+RE_DEF      = re.compile(r'\b(is defined as|we define|defined as|refers to)\b', re.I)
+RE_BOUNDARY = re.compile(r'\b(distinct from|differs from|as opposed to|not merely|boundary|scope conditions?)\b', re.I)
+RE_THEORY   = re.compile(r'\b(model|mechanism|dual[\s-]?systems?|process model|expected value of control|valuation)\b', re.I)
+
+RE_DESIGN   = re.compile(r'\b(randomi[sz]ed|experiment|intervention|longitudinal|cross[- ]sectional|pre[- ]post|RCT)\b', re.I)
+
+RE_ALPHA    = re.compile(r'(?:cronbach[^a-zA-Z]*alpha|alpha)\s*(?:=|:)?\s*([0]\.\d{2,}|[1](?:\.0+)?)', re.I)
+RE_OMEGA    = re.compile(r'(?:omega|ω)\s*(?:=|:)?\s*([0]\.\d{2,}|[1](?:\.0+)?)', re.I)
+RE_TRT      = re.compile(r'(?:test[- ]?retest|ICC)\s*(?:=|:)?\s*([0]\.\d{2,}|[1](?:\.0+)?)', re.I)
+
+RE_CFI      = re.compile(r'CFI\s*(?:=|:)\s*(0\.\d{2,})', re.I)
+RE_TLI      = re.compile(r'TLI\s*(?:=|:)\s*(0\.\d{2,})', re.I)
+RE_RMSEA    = re.compile(r'RMSEA\s*(?:=|:)\s*(0\.\d{2,})', re.I)
+RE_SRMR     = re.compile(r'SRMR\s*(?:=|:)\s*(0\.\d{2,})', re.I)
+RE_INVAR    = re.compile(r'\b(configural|metric|scalar|strict)\s+invariance\b|\bmeasurement invariance\b|\bDIF\b', re.I)
+
+RE_VALIDITY = re.compile(r'\b(convergent|discriminant|criterion|predictive|known[- ]groups|response[- ]process)\b', re.I)
+
+# --- helpers
+def find_sents(blob, pattern, maxn=6):
+    sents = sentences(blob)
     out = []
-    for p in reader.pages:
-        try:
-            t = p.extract_text()
-            if t: out.append(t)
-        except Exception:
-            pass
-    return "\n".join(out)
-
-# ---------- Heuristics / Patterns ----------
-RE_DEF = re.compile(r"\b(is defined as|we define|defined as|refers to)\b", re.I)
-RE_BOUNDARY = re.compile(r"\b(distinct from|differs from|as opposed to|not merely|boundary|scope conditions?)\b", re.I)
-RE_THEORY = re.compile(r"\b(model|theor(y|ies)|mechanism|process model|dual(-|\s)?systems?|expected value of control|valuation)\b", re.I)
-RE_DESIGN = re.compile(r"\b(randomi[sz]ed|experiment|intervention|longitudinal|cross[- ]sectional|pre[- ]post|RCT)\b", re.I)
-
-RE_REL = re.compile(r"\b(alpha|cronbach|omega|test[- ]?retest|ICC)\b", re.I)
-RE_CFA = re.compile(r"\b(CFA|confirmatory factor analysis|RMSEA|CFI|TLI|SRMR)\b", re.I)
-RE_INV = re.compile(r"\b(configural|metric|scalar|strict)\s+invariance\b|\bmeasurement invariance\b|\bDIF\b", re.I)
-RE_VAL = re.compile(r"\b(convergent|discriminant|criterion|predictive|known[- ]groups|response[- ]process)\b", re.I)
-
-def find_snips(text, pattern, n=5):
-    out = []
-    for m in pattern.finditer(text):
-        s = max(0, m.start()-160); e = min(len(text), m.end()+160)
-        out.append(text[s:e].replace("\n"," "))
-        if len(out)>=n: break
+    for s in sents:
+        if pattern.search(s):
+            out.append(s)
+        if len(out) >= maxn: break
     return out
 
-# ---------- Domain-specific extraction ----------
 def detect_constructs(text):
-    hits = []
+    hits = {}
     for key, node in KB_CONS["constructs"].items():
         labels = node.get("canonical_labels", []) + node.get("near_neighbors", [])
         for lbl in labels:
-            if re.search(rf"\b{re.escape(lbl)}\b", text, re.I):
-                hits.append((key, lbl))
-    # dedupe by canonical
-    seen = {}
-    for canon, lbl in hits:
-        seen.setdefault(canon, set()).add(lbl)
-    return {k: sorted(list(v)) for k,v in seen.items()}
+            if re.search(rf'\b{re.escape(lbl)}\b', text, re.I):
+                hits.setdefault(key, set()).add(lbl)
+    return {k: sorted(v) for k,v in hits.items()}
 
 def detect_measures(text):
     found = []
     for meas, node in KB_MEAS["measures"].items():
         for alias in node["aliases"]:
-            if re.search(rf"\b{re.escape(alias)}\b", text, re.I):
-                found.append({
-                    "measure": meas,
-                    "alias": alias,
-                    "type": node["type"],
-                    "targets": node["targets"],
-                })
+            if re.search(rf'\b{re.escape(alias)}\b', text, re.I):
+                found.append({"measure": meas, "alias": alias, "type": node["type"], "targets": node["targets"]})
                 break
     return found
 
-def map_measures_to_components(found_measures):
-    # Flatten targets to "subcomponents"
+def map_measures_to_components(found):
     buckets = {}
-    for item in found_measures:
+    for item in found:
         for t in item["targets"]:
             buckets.setdefault(t, []).append(item["measure"])
-    return buckets
+    return {k: sorted(set(v)) for k,v in buckets.items()}
 
-def jingle_jangle_warnings(text, constructs_found, measures_found):
+def extract_numbers(blob):
+    nums = {}
+    # reliability
+    alpha = [float(x) for x in RE_ALPHA.findall(blob)]
+    omega = [float(x) for x in RE_OMEGA.findall(blob)]
+    trt   = [float(x) for x in RE_TRT.findall(blob)]
+    # structure/fit
+    cfi   = [float(x) for x in RE_CFI.findall(blob)]
+    tli   = [float(x) for x in RE_TLI.findall(blob)]
+    rmsea = [float(x) for x in RE_RMSEA.findall(blob)]
+    srmr  = [float(x) for x in RE_SRMR.findall(blob)]
+    inv   = bool(RE_INVAR.search(blob))
+    nums["alpha"] = alpha
+    nums["omega"] = omega
+    nums["test_retest_or_ICC"] = trt
+    nums["CFI"] = cfi
+    nums["TLI"] = tli
+    nums["RMSEA"] = rmsea
+    nums["SRMR"] = srmr
+    nums["invariance_signal"] = inv
+    return nums
+
+def threshold_comments(nums):
+    comments = []
+    def any_ge(vals, thr): return any(v >= thr for v in vals) if vals else False
+    def any_le(vals, thr): return any(v <= thr for v in vals) if vals else False
+
+    if nums["alpha"]:
+        comments.append(f"α values: {nums['alpha']} ⇒ {'OK (≥ .70)' if any_ge(nums['alpha'], .70) else 'low'}")
+    if nums["omega"]:
+        comments.append(f"ω values: {nums['omega']} ⇒ {'OK (≥ .70)' if any_ge(nums['omega'], .70) else 'low'}")
+    if nums["test_retest_or_ICC"]:
+        comments.append(f"Test–retest/ICC: {nums['test_retest_or_ICC']} ⇒ {'OK (≥ .70 typical)' if any_ge(nums['test_retest_or_ICC'], .70) else 'low'}")
+    if nums["CFI"]:
+        comments.append(f"CFI: {nums['CFI']} ⇒ {'OK (≥ .95 good, ≥ .90 acceptable)' if any_ge(nums['CFI'], .90) else 'poor'}")
+    if nums["TLI"]:
+        comments.append(f"TLI: {nums['TLI']} ⇒ {'OK (≥ .95/.90)' if any_ge(nums['TLI'], .90) else 'poor'}")
+    if nums["RMSEA"]:
+        comments.append(f"RMSEA: {nums['RMSEA']} ⇒ {'OK (≤ .06 good, ≤ .08 acceptable)' if any_le(nums['RMSEA'], .08) else 'high'}")
+    if nums["SRMR"]:
+        comments.append(f"SRMR: {nums['SRMR']} ⇒ {'OK (≤ .08 typical)' if any_le(nums['SRMR'], .08) else 'high'}")
+    if nums["invariance_signal"]:
+        comments.append("Measurement invariance mentioned (check configural/metric/scalar).")
+    return comments
+
+def jingle_jangle(text, constructs_found, measures_found):
     warns = []
-    # Jingle: same label used with divergent operations (e.g., "self-control" with only "Grit-S")
-    label_ops = set([m["measure"] for m in measures_found])
-    if "self-control" in constructs_found and "GritS" in label_ops:
-        warns.append("Jingle risk: ‘self-control’ label used while measuring ‘grit’ (Grit-S). Check construct boundaries.")
-    # Jangle: different labels for overlapping ops
+    ops = {m["measure"] for m in measures_found}
+    if "self-control" in constructs_found and "GritS" in ops:
+        warns.append("Jingle risk: paper labels ‘self-control’ but uses Grit-S (grit). Check boundaries.")
     if "self-control" in constructs_found and "self-regulation" in constructs_found:
-        if not re.search(r"\b(distinct from|differs from|as opposed to|boundary)\b", text, re.I):
-            warns.append("Jangle risk: ‘self-control’ and ‘self-regulation’ used without explicit differentiation.")
-    # Mixed ops within one paper
+        if not RE_BOUNDARY.search(text):
+            warns.append("Jangle risk: both ‘self-control’ and ‘self-regulation’ are used with no explicit differentiation.")
     if any(m["type"]=="self-report" for m in measures_found) and any(m["type"]=="behavioral task" for m in measures_found):
-        warns.append("Method mix: self-report and behavioral tasks both present—ensure theoretical mapping is explicit.")
+        warns.append("Method mix: self-report and behavioral tasks both present — mapping to theory should be explicit.")
     return warns
 
-def axis_selfcontrol_checklist(text):
-    # Theory & scope
-    has_def = bool(RE_DEF.search(text))
-    has_boundary = bool(RE_BOUNDARY.search(text))
-    has_theory = bool(RE_THEORY.search(text))
+st.set_page_config(page_title="Construct Health — SC/SRL", layout="wide")
+st.title("🧠 Construct Health — Self-Control / Self-Regulation (v2.1)")
 
-    # Ops & design
-    measures = detect_measures(text)
-    constructs = detect_constructs(text)
-    components = map_measures_to_components(measures)
-    design_snips = find_snips(text, RE_DESIGN, 3)
+uploaded = st.file_uploader("📄 Upload a PDF", type=["pdf"])
 
-    # Evidence signals
-    rel = bool(RE_REL.search(text))
-    cfa = bool(RE_CFA.search(text))
-    inv = bool(RE_INV.search(text))
-    val = bool(RE_VAL.search(text))
-
-    # Jingle/Jangle
-    jj = jingle_jangle_warnings(text, constructs, measures)
-
-    checklist = {
-        "theory_scope": {
-            "definition_present": has_def,
-            "boundary_conditions": has_boundary,
-            "theory_or_mechanism_stated": has_theory,
-            "definition_snippets": find_snips(text, RE_DEF, 3),
-            "theory_snippets": find_snips(text, RE_THEORY, 3),
-        },
-        "operationalization": {
-            "constructs_detected": constructs,              # canonical -> labels matched
-            "measures_detected": measures,                  # list of dicts
-            "component_map": components,                    # component -> measures
-            "design_mentions": design_snips,
-        },
-        "measurement_evidence": {
-            "reliability_signal": rel,
-            "structure_fit_signal": cfa,
-            "invariance_signal": inv,
-            "validity_signal": val,
-            "reliability_snips": find_snips(text, RE_REL, 3),
-            "structure_snips": find_snips(text, RE_CFA, 3),
-            "invariance_snips": find_snips(text, RE_INV, 3),
-            "validity_snips": find_snips(text, RE_VAL, 3),
-        },
-        "jingle_jangle": {
-            "warnings": jj
-        }
-    }
-    return checklist
-
-# ---------- UI ----------
-uploaded = st.file_uploader("📄 Upload a PDF (Self-Control / Self-Regulation)", type=["pdf"])
 if uploaded:
-    with st.spinner("🔎 Reading & analyzing…"):
-        text = extract_text(uploaded)
-        rep = axis_selfcontrol_checklist(text)
+    with st.spinner("🔎 Parsing and analyzing…"):
+        blob = extract_text(uploaded)
+        secs = sectionize(blob)
+        focus = " ".join([
+            secs.get("Abstract",""),
+            secs.get("Introduction",""),
+            secs.get("Theory",""),
+            secs.get("Method","") + " " + secs.get("Measures",""),
+            secs.get("Results",""),
+            secs.get("Discussion","")
+        ])
+
+        constructs = detect_constructs(focus)
+        measures = detect_measures(focus)
+        comp_map = map_measures_to_components(measures)
+
+        nums = extract_numbers(focus)
+        num_comments = threshold_comments(nums)
+
+        defs = find_sents(focus, RE_DEF, 5)
+        bounds = find_sents(focus, RE_BOUNDARY, 5)
+        mech = find_sents(focus, RE_THEORY, 5)
+        design = find_sents(focus, RE_DESIGN, 5)
+        validity = find_sents(focus, RE_VALIDITY, 6)
+
+        jj = jingle_jangle(focus, constructs, measures)
 
     st.success("✅ Analysis complete")
 
-    # --- Topline summary ---
-    col1, col2, col3 = st.columns([1,1,1])
-    with col1:
-        st.metric("Definition present", "Yes" if rep["theory_scope"]["definition_present"] else "No")
-        st.metric("Theory/mechanism", "Yes" if rep["theory_scope"]["theory_or_mechanism_stated"] else "No")
-    with col2:
-        st.metric("Reliability signal", "Yes" if rep["measurement_evidence"]["reliability_signal"] else "No")
-        st.metric("Structure/fit signal", "Yes" if rep["measurement_evidence"]["structure_fit_signal"] else "No")
-    with col3:
-        st.metric("Invariance signal", "Yes" if rep["measurement_evidence"]["invariance_signal"] else "No")
-        st.metric("Validity signal", "Yes" if rep["measurement_evidence"]["validity_signal"] else "No")
+    c1,c2,c3 = st.columns(3)
+    with c1:
+        st.metric("Definition present", "Yes" if defs else "No")
+        st.metric("Theory/mechanism", "Yes" if mech else "No")
+    with c2:
+        st.metric("Reliability reported", "Yes" if (nums["alpha"] or nums["omega"] or nums["test_retest_or_ICC"]) else "No")
+        st.metric("Structure/fit indices", "Yes" if (nums["CFI"] or nums["TLI"] or nums["RMSEA"] or nums["SRMR"]) else "No")
+    with c3:
+        st.metric("Invariance signal", "Yes" if nums["invariance_signal"] else "No")
+        st.metric("Validity mentions", f"{len(validity)} hits")
 
-    # Tabs
-    t1, t2, t3, t4, t5 = st.tabs(["Summary", "Theory & Scope", "Measures & Methods", "Jingle–Jangle", "Raw snippets"])
+    t1, t2, t3, t4, t5 = st.tabs(["Summary", "Theory & Scope", "Measures & Methods", "Jingle–Jangle", "Raw / Export"])
 
     with t1:
         st.subheader("Constructs detected")
-        st.json(rep["operationalization"]["constructs_detected"])
+        st.json(constructs or {"note": "none detected by heuristics"})
         st.subheader("Component mapping (targets → measures)")
-        st.json(rep["operationalization"]["component_map"])
-        st.subheader("Study design cues")
-        for sn in rep["operationalization"]["design_mentions"]:
-            st.write("•", sn)
+        st.json(comp_map or {"note": "no target mappings detected"})
+        st.subheader("Fit & reliability comments")
+        for c in (num_comments or ["No numeric indices detected."]):
+            st.write("•", c)
 
     with t2:
-        st.subheader("Definition & boundaries")
-        for sn in rep["theory_scope"]["definition_snippets"]:
-            st.write("→", sn)
-        st.markdown("**Boundary conditions mentioned?** " + ("Yes" if rep["theory_scope"]["boundary_conditions"] else "No"))
-        st.subheader("Theory/mechanism snippets")
-        for sn in rep["theory_scope"]["theory_snippets"]:
-            st.write("→", sn)
+        st.subheader("Definition sentences")
+        for s in defs: st.write("→", s)
+        st.subheader("Boundary / scope sentences")
+        for s in bounds: st.write("→", s)
+        st.subheader("Theory / mechanism sentences")
+        for s in mech: st.write("→", s)
 
     with t3:
         st.subheader("Measures detected")
-        st.table([{k: v for k,v in m.items()} for m in rep["operationalization"]["measures_detected"]])
-        st.subheader("Measurement evidence signals")
-        for label, snips in [
-            ("Reliability", rep["measurement_evidence"]["reliability_snips"]),
-            ("Structure / CFA / IRT", rep["measurement_evidence"]["structure_snips"]),
-            ("Invariance / DIF", rep["measurement_evidence"]["invariance_snips"]),
-            ("Validity classes", rep["measurement_evidence"]["validity_snips"]),
-        ]:
-            if snips:
-                with st.expander(label):
-                    for s in snips: st.write("→", s)
+        st.table([{k:v for k,v in m.items()} for m in measures] or [{"note":"no measures detected"}])
+        st.subheader("Study design cues")
+        for s in design: st.write("•", s)
+        st.subheader("Validity evidence sentences")
+        for s in validity: st.write("→", s)
 
     with t4:
-        st.subheader("Jingle–Jangle / method-mix warnings")
-        if rep["jingle_jangle"]["warnings"]:
-            for w in rep["jingle_jangle"]["warnings"]:
-                st.warning(w)
+        st.subheader("Warnings")
+        if jj:
+            for w in jj: st.warning(w)
         else:
-            st.info("No obvious jingle–jangle risks detected by heuristics.")
+            st.info("No obvious jingle–jangle risks flagged.")
 
     with t5:
-        st.subheader("Full checklist JSON")
-        st.json(rep)
-        # download
+        report = {
+            "constructs_detected": constructs,
+            "measures_detected": measures,
+            "component_map": comp_map,
+            "definition_sents": defs,
+            "boundary_sents": bounds,
+            "theory_sents": mech,
+            "design_sents": design,
+            "validity_sents": validity,
+            "numeric_indices": nums,
+            "numeric_comments": num_comments,
+            "warnings": jj
+        }
+        st.subheader("Checklist JSON")
+        st.json(report)
         st.download_button(
-            label="⬇️ Download JSON",
-            data=json.dumps(rep, indent=2).encode("utf-8"),
+            "⬇️ Download JSON",
+            data=json.dumps(report, indent=2).encode("utf-8"),
             file_name="construct_health_sc_srl.json",
-            mime="application/json",
+            mime="application/json"
         )
