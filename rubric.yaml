@@ -1,0 +1,15 @@
+# Construct Health MVP rubric (prototype)
+
+features:
+  - Definition clarity
+  - Reliability evidence
+  - Factor structure (CFA/fit)
+  - Measurement invariance / DIF
+  - Validity evidence
+  - Fairness / harm
+
+scoring:
+  0: "Absent"
+  1: "Minimal"
+  2: "Adequate"
+  3: "Strong"
