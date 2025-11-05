@@ -1,0 +1,37 @@
+measures:
+  BSCS:
+    aliases: ["Brief Self-Control Scale", "Tangney Self-Control Scale", "BSCS", "BSCS-13", "BSCS 13"]
+    type: "self-report"
+    targets: ["self-control (trait)"]
+  DelayDiscounting:
+    aliases: ["delay discounting", "temporal discounting", "Kirby", "MCQ", "hyperbolic discounting", "adjusting amount"]
+    type: "behavioral task"
+    targets: ["delay of gratification / valuation"]
+  GoNoGo:
+    aliases: ["go/no-go", "go–no go", "go nogo"]
+    type: "behavioral task"
+    targets: ["inhibitory control"]
+  StopSignal:
+    aliases: ["stop-signal task", "SST", "SSRT", "stop signal reaction time"]
+    type: "behavioral task"
+    targets: ["inhibitory control"]
+  Stroop:
+    aliases: ["Stroop", "color-word Stroop"]
+    type: "behavioral task"
+    targets: ["interference control"]
+  Flanker:
+    aliases: ["Eriksen Flanker", "Flanker task"]
+    type: "behavioral task"
+    targets: ["attention/interference control"]
+  NBack:
+    aliases: ["N-back", "N back"]
+    type: "behavioral task"
+    targets: ["working memory / maintenance"]
+  GritS:
+    aliases: ["Grit-S", "Grit-S scale", "Short Grit Scale"]
+    type: "self-report"
+    targets: ["grit (perseverance of effort, consistency of interests)"]
+  EffortfulControl:
+    aliases: ["Effortful Control", "Adult Temperament Questionnaire", "ATQ Effortful Control"]
+    type: "self-report"
+    targets: ["effortful control (temperament)"]
