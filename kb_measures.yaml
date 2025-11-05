@@ -3,8 +3,12 @@ measures:
     aliases: ["Brief Self-Control Scale", "Tangney Self-Control Scale", "BSCS", "BSCS-13", "BSCS 13"]
     type: "self-report"
     targets: ["self-control (trait)"]
+  SCS:
+    aliases: ["Self-Control Scale", "SCS (Tangney)"]
+    type: "self-report"
+    targets: ["self-control (trait)"]
   DelayDiscounting:
-    aliases: ["delay discounting", "temporal discounting", "Kirby", "MCQ", "hyperbolic discounting", "adjusting amount"]
+    aliases: ["delay discounting", "temporal discounting", "Kirby", "MCQ", "monetary choice questionnaire", "hyperbolic discounting"]
     type: "behavioral task"
     targets: ["delay of gratification / valuation"]
   GoNoGo:
@@ -16,7 +20,7 @@ measures:
     type: "behavioral task"
     targets: ["inhibitory control"]
   Stroop:
-    aliases: ["Stroop", "color-word Stroop"]
+    aliases: ["Stroop", "color-word Stroop", "emotional Stroop"]
     type: "behavioral task"
     targets: ["interference control"]
   Flanker:
@@ -28,10 +32,30 @@ measures:
     type: "behavioral task"
     targets: ["working memory / maintenance"]
   GritS:
-    aliases: ["Grit-S", "Grit-S scale", "Short Grit Scale"]
+    aliases: ["Grit-S", "Grit S", "Short Grit Scale"]
     type: "self-report"
-    targets: ["grit (perseverance of effort, consistency of interests)"]
+    targets: ["grit (perseverance/consistency)"]
   EffortfulControl:
-    aliases: ["Effortful Control", "Adult Temperament Questionnaire", "ATQ Effortful Control"]
+    aliases: ["Effortful Control", "ATQ Effortful Control", "Adult Temperament Questionnaire Effortful Control"]
     type: "self-report"
     targets: ["effortful control (temperament)"]
+  BRIEF:
+    aliases: ["BRIEF", "Behavior Rating Inventory of Executive Function"]
+    type: "informant report"
+    targets: ["executive function"]
+  DERS:
+    aliases: ["DERS", "Difficulties in Emotion Regulation Scale"]
+    type: "self-report"
+    targets: ["emotion regulation difficulties"]
+  MSLQ_SRL:
+    aliases: ["MSLQ", "Motivated Strategies for Learning Questionnaire", "MSLQ self-regulated learning"]
+    type: "self-report"
+    targets: ["self-regulation (learning)"]
+  SRLQ:
+    aliases: ["SRLQ", "Self-Regulated Learning Questionnaire"]
+    type: "self-report"
+    targets: ["self-regulation (learning)"]
+  ERC:
+    aliases: ["Effortful Regulation Checklist", "ERC"]
+    type: "informant report"
+    targets: ["effortful control / regulation"]
